@@ -18,6 +18,12 @@ assert scipy.__version__ == '1.1.0'
 assert trimesh.__version__ == '2.37.1'
 assert rtree.__version__ == '0.9.3'
 
+import wandb
+
+import math
+pi = math.pi
+
+from PIL import Image
 
 # We use SR-CNN as pre-processing to remove JPEG artifacts in input images.
 # You can remove these code if you have high-quality PNG images.
@@ -126,6 +132,9 @@ def generate_lighting_effects(stroke_density, content):
 
 def run(image, mask, ambient_intensity, light_intensity, light_source_height, gamma_correction, stroke_density_clipping, light_color_red, light_color_green, light_color_blue, enabling_multiple_channel_effects):
 
+
+    wandb.init(entity='ayush-thakur', project='paintlight')
+    
     # Some pre-processing to resize images and remove input JPEG artifacts.
     raw_image = min_resize(image, 512)
     raw_image = run_srcnn(raw_image)
@@ -183,21 +192,22 @@ def run(image, mask, ambient_intensity, light_intensity, light_source_height, ga
         generate_lighting_effects(stroke_density, raw_image[:, :, 2])
     ], axis=2)
 
-    # Using a simple user interface to display results.
-
-    def update_mouse(event, x, y, flags, param):
-        global gx
-        global gy
-        gx = - float(x % w) / float(w) * 2.0 + 1.0
-        gy = - float(y % h) / float(h) * 2.0 + 1.0
-        return
-
     light_source_color = np.array([light_color_blue, light_color_green, light_color_red])
 
-    global gx
-    global gy
 
-    while True:
+    ## points in circle  
+    def PointsInCircum(r,n=10):
+        return [(math.cos(2*pi/n*x)*r,math.sin(2*pi/n*x)*r) for x in range(0,n+1)]
+
+
+    ## Log images as gif
+    def log_gif(ims, log_name):
+        ims[0].save('light.gif', save_all=True, append_images=ims[1:], duration=40, loop=0)
+        wandb.log({"{}".format(log_name): wandb.Video('light.gif', fps=4, format="gif")})
+
+
+    ## Apply lightening effect
+    def apply_light(gx, gy, log_name):
         light_source_location = np.array([[[light_source_height, gy, gx]]], dtype=np.float32)
         light_source_direction = light_source_location / np.sqrt(np.sum(np.square(light_source_location)))
         final_effect = np.sum(lighting_effect * light_source_direction, axis=3).clip(0, 1)
@@ -205,7 +215,56 @@ def run(image, mask, ambient_intensity, light_intensity, light_source_height, ga
             final_effect = np.mean(final_effect, axis=2, keepdims=True)
         rendered_image = (ambient_intensity + final_effect * light_intensity) * light_source_color * raw_image
         rendered_image = ((rendered_image / 255.0) ** gamma_correction) * 255.0
-        canvas = np.concatenate([raw_image, rendered_image], axis=1).clip(0, 255).astype(np.uint8)
-        cv2.imshow('Move your mouse on the canvas to play!', canvas)
-        cv2.setMouseCallback('Move your mouse on the canvas to play!', update_mouse)
-        cv2.waitKey(10)
+        
+        canvas = rendered_image.clip(0,255).astype(np.uint8)
+        canvas = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)
+    
+        print("[INFO] gx is: {} | gy is: {}".format(gx, gy))
+        print("[INFO] Logging image to wandb")
+        wandb.log({'{}'.format(log_name): [wandb.Image(canvas)]})
+
+        return canvas
+
+
+    ## Move across x-axis
+    gx_samples_horizontal = np.arange(-0.99, 0.99, 0.1)
+    gy_samples_horizontal = np.repeat(np.random.uniform(-0.35, 0.65, 1), len(gx_samples_horizontal))
+
+    ## Move across y-axis
+    gy_samples_vertical = np.arange(-0.99, 0.99, 0.1)
+    gx_samples_vertical = np.repeat(np.random.uniform(-0.35, 0.65, 1), len(gy_samples_vertical))
+
+    ## Move in circular motion
+    circlepoints = PointsInCircum(r=0.7, n=20)
+
+    ## Original Image and Stroke Density
+    original_image = raw_image.copy().clip(0, 255).astype(np.uint8)
+    original_image = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
+
+    stroke_density_log = stroke_density.clip(0, 255).astype(np.uint8)
+    stroke_density_log = cv2.cvtColor(stroke_density_log, cv2.COLOR_BGR2RGB)
+
+    wandb.log({"original-image": [wandb.Image(original_image)]})
+    wandb.log({"stroke-density": [wandb.Image(stroke_density_log)]})
+    
+    ## Apply light horizontally
+    ims= []
+    for gx, gy in zip(gx_samples_horizontal, gy_samples_horizontal):
+        im = apply_light(gx, gy, 'swipe_across_horizontallyn_015')
+        ims.append(Image.fromarray(im))
+    log_gif(ims, 'swipe_across_horizontallyn_gif_015')
+    
+    ## Apply light vertically
+    ims= []
+    for gx, gy in zip(gx_samples_horizontal, gy_samples_horizontal):
+        im = apply_light(gx, gy, 'swipe_across_verticallyn_015')
+        ims.append(Image.fromarray(im))
+    log_gif(ims, 'swipe_across_verticallyn_gif_015')
+
+    ## Apply light in circular manner
+    ims= []
+    for gx, gy in circlepoints:
+        im = apply_light(gy, gy, 'move_circlen_015')
+        ims.append(Image.fromarray(im))
+    log_gif(ims, 'move_circlen_gif_015')
+
