@@ -18,7 +18,6 @@ assert scipy.__version__ == '1.1.0'
 assert trimesh.__version__ == '2.37.1'
 assert rtree.__version__ == '0.9.3'
 
-import wandb
 
 import math
 pi = math.pi
@@ -203,7 +202,7 @@ def run(image, mask, ambient_intensity, light_intensity, light_source_height, ga
     ## Log images as gif
     def log_gif(ims, log_name):
         ims[0].save('light.gif', save_all=True, append_images=ims[1:], duration=40, loop=0)
-        wandb.log({"{}".format(log_name): wandb.Video('light.gif', fps=4, format="gif")})
+        #wandb.log({"{}".format(log_name): wandb.Video('light.gif', fps=4, format="gif")})
 
 
     ## Apply lightening effect
@@ -221,7 +220,7 @@ def run(image, mask, ambient_intensity, light_intensity, light_source_height, ga
     
         print("[INFO] gx is: {} | gy is: {}".format(gx, gy))
         print("[INFO] Logging image to wandb")
-        wandb.log({'{}'.format(log_name): [wandb.Image(canvas)]})
+        #wandb.log({'{}'.format(log_name): [wandb.Image(canvas)]})
 
         return canvas
 
@@ -244,8 +243,8 @@ def run(image, mask, ambient_intensity, light_intensity, light_source_height, ga
     stroke_density_log = stroke_density.clip(0, 255).astype(np.uint8)
     stroke_density_log = cv2.cvtColor(stroke_density_log, cv2.COLOR_BGR2RGB)
 
-    wandb.log({"original-image": [wandb.Image(original_image)]})
-    wandb.log({"stroke-density": [wandb.Image(stroke_density_log)]})
+    #wandb.log({"original-image": [wandb.Image(original_image)]})
+    #wandb.log({"stroke-density": [wandb.Image(stroke_density_log)]})
     
     ## Apply light horizontally
     ims= []
